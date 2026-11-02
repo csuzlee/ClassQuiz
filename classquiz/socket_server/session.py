@@ -23,4 +23,4 @@ async def save_session(sid: str, sio: AsyncServer, data: Any, disconnect_on_erro
     session_id = (await sio.get_session(sid)).get("session_id")
     if session_id is None:
         raise ConnectionRefusedError("Session not configured")
-    await redis.set(f"socket_io_session:{session_id}", json.dumps(data), ex=3600)
+    await redis.set(f"socket_io_session:{session_id}", json.dumps(data), ex=18000)

@@ -82,12 +82,19 @@ SPDX-License-Identifier: MPL-2.0
 			return;
 		}
 		const data = JSON.parse(cookie_data);
+		// A cookie left over from another game must not hijack this one
+		if (game_pin && String(data.game_pin) !== String(game_pin)) {
+			Cookies.remove('joined_game');
+			return;
+		}
+		username = data.username;
+		game_pin = data.game_pin;
 		socket.emit('rejoin_game', {
 			old_sid: data.sid,
 			username: data.username,
 			game_pin: data.game_pin
 		});
-		const res = await fetch(`/api/v1/quiz/play/check_captcha/${game_pin}`);
+		const res = await fetch(`/api/v1/quiz/play/check_captcha/${data.game_pin}`);
 		const json = await res.json();
 		game_mode = json.game_mode;
 	});
@@ -106,6 +113,24 @@ SPDX-License-Identifier: MPL-2.0
 		if (data.started) {
 			gameMeta.started = true;
 		}
+	});
+
+	socket.on('score_sync', (data) => {
+		// After a page reload the running totals are gone; reconnects keep them
+		if (JSON.stringify(scores) === '{}') {
+			scores = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, Number(v)]));
+		}
+	});
+
+	socket.on('rejoin_failed', () => {
+		Cookies.remove('joined_game');
+		preventReload = false;
+		window.alert('Nem sikerült visszacsatlakozni a játékhoz.');
+		window.location.reload();
+	});
+
+	socket.on('game_already_started', () => {
+		window.alert('A játék már elindult, ezzel a névvel nem lehet csatlakozni.');
 	});
 
 	socket.on('game_not_found', () => {

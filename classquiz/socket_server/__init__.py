@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -11,6 +12,7 @@ import random
 
 import socketio
 from cryptography.fernet import Fernet
+from socketio.exceptions import ConnectionRefusedError
 
 from classquiz.config import redis, settings
 from classquiz.db.models import (
@@ -92,21 +94,14 @@ async def rejoin_game(sid: str, data: dict):
     except ValidationError as e:
         await sio.emit("error", room=sid)
         print(e)
-    redis_sid_key = f"game_session:{data.game_pin}:players:{data.username}"
-    old_sid = await redis.get(redis_sid_key)
-    if old_sid != data.old_sid:
         return
-    encrypted_datetime = fernet.encrypt(datetime.now().isoformat().encode("utf-8")).decode("utf-8")
-    await sio.emit("time_sync", encrypted_datetime, room=sid)
-    await redis.set(redis_sid_key, sid)
-    await redis.srem(
-        f"game_session:{data.game_pin}:players",
-        GamePlayer(username=data.username, sid=data.old_sid).model_dump_json(),
-    )
-    await redis.sadd(
-        f"game_session:{data.game_pin}:players",
-        GamePlayer(username=data.username, sid=sid).model_dump_json(),
-    )
+    redis_sid_key = f"game_session:{data.game_pin}:players:{data.username}"
+    current_sid = await redis.get(redis_sid_key)
+    # The browser cookie keeps the sid from the original join, so that one stays valid for every later rejoin.
+    first_sid = await redis.hget(f"game_session:{data.game_pin}:first_sids", data.username)
+    if current_sid is None or data.old_sid not in (current_sid, first_sid):
+        await sio.emit("rejoin_failed", room=sid)
+        return
     game_data = PlayGame.model_validate_json(redis_res)
     session = {
         "game_pin": data.game_pin,
@@ -114,13 +109,27 @@ async def rejoin_game(sid: str, data: dict):
         "sid_custom": sid,
         "admin": False,
     }
+    # Save the session first: time_sync's echo and buffered answers both need it.
     await save_session(sid, sio, session)
+    await redis.set(redis_sid_key, sid, ex=18000)
+    await redis.srem(
+        f"game_session:{data.game_pin}:players",
+        GamePlayer(username=data.username, sid=current_sid).model_dump_json(),
+    )
+    await redis.sadd(
+        f"game_session:{data.game_pin}:players",
+        GamePlayer(username=data.username, sid=sid).model_dump_json(),
+    )
     await sio.enter_room(sid, data.game_pin)
     await sio.emit(
         "rejoined_game",
         game_data.to_player_data(),
         room=sid,
     )
+    scores = await redis.hgetall(f"game_session:{data.game_pin}:player_scores")
+    await sio.emit("score_sync", scores, room=sid)
+    encrypted_datetime = fernet.encrypt(datetime.now().isoformat().encode("utf-8")).decode("utf-8")
+    await sio.emit("time_sync", encrypted_datetime, room=sid)
 
 
 @sio.event
@@ -161,7 +170,9 @@ async def join_game(sid: str, data: dict):
         game_data.to_player_data(),
         room=sid,
     )
-    await redis.set(f"game_session:{data.game_pin}:players:{data.username}", sid, ex=7200)
+    await redis.set(f"game_session:{data.game_pin}:players:{data.username}", sid, ex=18000)
+    await redis.hset(f"game_session:{data.game_pin}:first_sids", data.username, sid)
+    await redis.expire(f"game_session:{data.game_pin}:first_sids", 18000)
     await GamePlayer(username=data.username, sid=sid).to_player_stack(data.game_pin)
 
     if data.custom_field == "":
@@ -273,6 +284,20 @@ async def set_question_number(sid: str, data: str):
     )
 
 
+async def wait_for_player_session(sid: str) -> dict | None:
+    # socket.io-client flushes answers buffered offline BEFORE the connect handler sends rejoin_game,
+    # and handlers run concurrently, so give the rejoin up to two seconds to finish.
+    for _ in range(20):
+        try:
+            session = await get_session(sid, sio)
+            if "username" in session:
+                return session
+        except ConnectionRefusedError:
+            pass
+        await asyncio.sleep(0.1)
+    return None
+
+
 @sio.event
 async def submit_answer(sid: str, data: dict):
     now = datetime.now()
@@ -283,7 +308,10 @@ async def submit_answer(sid: str, data: dict):
         print(e)
         return
     data.answer = str(data.answer)
-    session = await get_session(sid, sio)
+    session = await wait_for_player_session(sid)
+    if session is None:
+        await sio.emit("rejoin_failed", room=sid)
+        return
     question_index = int(float(data.question_index))
     game_data = await PlayGame.get_from_redis(session["game_pin"])
 
@@ -297,7 +325,7 @@ async def submit_answer(sid: str, data: dict):
         return
 
     answer_right, answer = check_answer(game_data, data)
-    latency = int(float(session["ping"]))
+    latency = int(float(session.get("ping", 0)))
     time_q_started = datetime.fromisoformat(await redis.get(f"game:{session['game_pin']}:current_time"))
     diff = (time_q_started - now).total_seconds() * 1000  # - timedelta(milliseconds=latency)
     score = 0
@@ -318,12 +346,12 @@ async def submit_answer(sid: str, data: dict):
     )
     answer_count = await set_answer(game_pin=session["game_pin"], q_index=question_index, data=answer_data)
     player_count = await redis.scard(f"game_session:{session['game_pin']}:players")
-    await sio.emit("player_answer", {})
+    await sio.emit("player_answer", {}, room=f"admin:{session['game_pin']}")
     if answer_count == player_count:
         game_data = await PlayGame.get_from_redis(session["game_pin"])
         game_data.question_show = False
         await game_data.save(session["game_pin"])
-        await sio.emit("everyone_answered", {})
+        await sio.emit("everyone_answered", {}, room=session["game_pin"])
 
 
 @sio.event
@@ -390,6 +418,9 @@ async def kick_player(sid: str, data: dict):
         f"game_session:{session['game_pin']}:players",
         GamePlayer(username=data.username, sid=player_sid).model_dump_json(),
     )
+    # A kicked player must not be able to rejoin; the name stays taken.
+    await redis.hdel(f"game_session:{session['game_pin']}:first_sids", data.username)
+    await redis.set(f"game_session:{session['game_pin']}:players:{data.username}", "kicked", ex=18000)
     await sio.leave_room(player_sid, session["game_pin"])
     await sio.emit("kick", room=player_sid)
 
@@ -457,4 +488,4 @@ async def connect(sid: str, _environ, _auth):
     print("Connection opened with handler")
     sio_session = {"session_id": session_id}
     await sio.save_session(sid, sio_session)
-    await sio.emit("session_id", ConnectSessionIdEvent(session_id=session_id).dict())
+    await sio.emit("session_id", ConnectSessionIdEvent(session_id=session_id).dict(), room=sid)

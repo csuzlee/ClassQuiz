@@ -1,0 +1,761 @@
+/* =========================================================================
+   ClassQuiz — Kahoot-ihletésű sötét téma
+   Injektálva: nginx sub_filter (css-injector-9fmpopbpwonwrdfb9lr3qvlj)
+   A frontend Tailwind v4-et használ, --color-* CSS-változókkal; ezeket
+   felülírva a legtöbb utility class (bg-/text-/border-/ring-, dark: és
+   hover: variánsokkal együtt) automatikusan követi az új paletta.
+   A válaszgombok háttérszíne viszont JS-ből kerül inline style-ba
+   (nem Tailwind class), ezért azt külön, nth-child + !important
+   trükkel kell felülírni.
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+
+:root{
+  color-scheme: dark;
+
+  /* --- saját paletta --- */
+  --cq-bg-900: #0c0924;
+  --cq-bg-800: #130f38;
+  --cq-surface: #1c1650;
+  --cq-surface-2: #251d63;
+  --cq-surface-3: #2e2576;
+  --cq-border: #3d3480;
+  --cq-text: #f4f2ff;
+  --cq-text-dim: #b7afe0;
+  --cq-accent: #7b2ff7;        /* Kahoot-os lila */
+  --cq-accent-hover: #9353fa;
+  --cq-accent-2: #ff3355;      /* CTA pink/piros */
+  --cq-accent-2-hover: #ff5774;
+
+  /* --- Kahoot válaszszínek --- */
+  --kahoot-red: #e21b3c;
+  --kahoot-blue: #1368ce;
+  --kahoot-yellow: #ffa602;
+  --kahoot-green: #26890c;
+
+  /* ---- Tailwind v4 theme tokenek felülírása ----
+     Minden ezekre hivatkozó utility (bg-*, text-*, border-*, ring-*,
+     hover:*, dark:* stb.) automatikusan az új értéket kapja.
+     FIGYELEM: --color-white / --color-black NEM írható át itt token-
+     szinten, mert ugyanazt a tokent használja a bg-white (háttér, sötét
+     legyen) ÉS a text-white/dark:text-white (szöveg, FEHÉR maradjon) —
+     ezt a kettős felhasználást lentebb property-specifikus
+     class-szelektorokkal kezeljük (bg-white vs. text-white külön). */
+
+  --color-blue-100: #2a2266;
+  --color-blue-200: #352a7d;
+  --color-blue-300: #4b3fa0;
+  --color-blue-400: #6a56d6;
+  --color-blue-500: var(--cq-accent);
+  --color-blue-600: var(--cq-accent-hover);
+  --color-blue-700: #8f4bf5;
+  --color-blue-800: #a870ff;
+
+  --color-red-100: #3a1420;
+  --color-red-400: #ff5c75;
+  --color-red-500: var(--kahoot-red);
+  --color-red-600: #c81733;
+  --color-red-700: #a5132b;
+
+  --color-green-300: #8de07a;
+  --color-green-400: #4fce3f;
+  --color-green-500: var(--kahoot-green);
+  --color-green-600: #1f7309;
+  --color-green-700: #185c08;
+
+  --color-yellow-400: #ffb733;
+  --color-yellow-500: var(--kahoot-yellow);
+
+  --color-amber-300: var(--kahoot-yellow);
+  --color-amber-700: #a86a00;
+  --color-orange-500: #ff7a1a;
+}
+
+/* =========================================================================
+   Alap: lap háttér, betűtípus
+   ========================================================================= */
+html, body{
+  background: radial-gradient(circle at 15% 0%, var(--cq-bg-800) 0%, var(--cq-bg-900) 55%) !important;
+  color: var(--cq-text) !important;
+  font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif !important;
+}
+
+h1, h2, h3, h4, .marck-script, .btn-nav{
+  font-family: 'Baloo 2', 'Nunito', sans-serif !important;
+}
+
+::selection{ background: var(--cq-accent); color: #fff; }
+
+/* finom lila "scrollbar" a sötét témához */
+::-webkit-scrollbar{ width: 10px; height: 10px; }
+::-webkit-scrollbar-track{ background: var(--cq-bg-900); }
+::-webkit-scrollbar-thumb{ background: var(--cq-surface-3); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover{ background: var(--cq-accent); }
+
+/* =========================================================================
+   Széles seprés: minden olyan elem, amelynek class-ában fehér/szürke/fekete
+   háttér vagy szöveg Tailwind-utility szerepel — substring-selectorral,
+   hogy ne kelljen minden árnyalatot egyenként felsorolni.
+   ========================================================================= */
+
+/* világos felületek -> sötét kártya felületek */
+[class*="bg-white"],
+[class*="bg-gray-5"],
+[class*="bg-gray-1"],
+[class*="bg-gray-2"]{
+  background-color: var(--cq-surface) !important;
+}
+
+/* "dark:" variánsban használt sötét felületek -> még egy fokkal emeltebb sötét */
+[class*="dark:bg-gray-7"],
+[class*="dark:bg-gray-8"],
+[class*="dark:bg-gray-9"],
+[class*="bg-gray-7"],
+[class*="bg-gray-8"],
+[class*="bg-gray-9"]{
+  background-color: var(--cq-surface-2) !important;
+}
+
+/* szövegszínek: sötét/fekete szöveg -> világos szöveg a sötét háttéren.
+   A text-white / dark:text-white itt is explicit marad (fehér/világos),
+   mert a --color-white tokent szándékosan NEM írjuk át (lásd fentebb). */
+[class*="text-black"],
+[class*="text-white"],
+[class*="text-gray-7"],
+[class*="text-gray-8"],
+[class*="text-gray-9"]{
+  color: var(--cq-text) !important;
+}
+[class*="text-gray-4"],
+[class*="text-gray-5"],
+[class*="text-gray-6"]{
+  color: var(--cq-text-dim) !important;
+}
+
+/* A visszaszámláló kör (#progress-circle) belseje szándékosan fehér marad
+   (JS-ből jövő inline --background: radial-gradient(white 50%, ...) —
+   ez nem Tailwind class, CSS-ből nem firkálható át anélkül, hogy a
+   színes "sürgősség-gyűrűt" is elveszítenénk). A benne lévő szám viszont
+   text-black class-t kap, amit a fenti általános szabály világosra
+   váltana -> fehér szöveg fehér körön, olvashatatlan. ID-vel felülírva
+   (nagyobb specificitás, mint az attribútum-szelektor), hogy itt maradjon
+   sötét a szöveg. */
+#progress-circle{
+  color: #1b1130 !important;
+}
+
+/* keretek */
+[class*="border-black"],
+[class*="border-gray-"]{
+  border-color: var(--cq-border) !important;
+}
+
+/* =========================================================================
+   Navigáció / fejléc
+   ========================================================================= */
+header, nav, [class*="backdrop-blur"]{
+  background-color: rgba(18, 14, 48, 0.82) !important;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.btn-nav{
+  color: var(--cq-text) !important;
+  font-weight: 700 !important;
+}
+.btn-nav:hover{
+  color: var(--cq-accent-hover) !important;
+}
+
+.link-hover:hover{
+  color: var(--cq-accent-hover) !important;
+}
+
+/* =========================================================================
+   Kártyák / panelek — kerekítés, árnyék, kis lila kontúr
+   ========================================================================= */
+[class*="rounded-lg"],
+[class*="rounded-xl"],
+[class*="rounded-2xl"]{
+  border-color: var(--cq-border) !important;
+}
+
+[class*="shadow-md"],
+[class*="shadow-lg"],
+[class*="shadow-2xl"]{
+  box-shadow: 0 8px 28px rgba(0,0,0,.55), 0 0 0 1px var(--cq-border) !important;
+}
+
+/* =========================================================================
+   Gombok — lekerekítettebb, félkövér, Kahoot-os CTA-gradiens a lila/pink
+   elsődleges gombokon
+   ========================================================================= */
+button, .btn, [role="button"]{
+  font-weight: 700;
+}
+
+[class*="bg-blue-5"],
+[class*="bg-blue-6"],
+[class*="bg-blue-7"],
+[class*="bg-blue-8"]{
+  background-image: linear-gradient(135deg, var(--cq-accent), var(--cq-accent-2)) !important;
+  background-color: var(--cq-accent) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(123,47,247,.45) !important;
+}
+[class*="hover:bg-blue-"]:hover{
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+/* a régi "natúr" márka-gombok (bg-[#B07156] stb., Tailwind arbitrary-value
+   class, NEM a --color-* tokenre hivatkozik) -> ugyanaz a lila/pink CTA */
+[class*="B07156" i],
+[class*="4E6E58" i],
+[class*="7F7057" i]{
+  background-color: var(--cq-accent) !important;
+  background-image: linear-gradient(135deg, var(--cq-accent), var(--cq-accent-2)) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(123,47,247,.45) !important;
+}
+[class*="D6EDC9" i]{
+  background-color: var(--cq-surface-2) !important;
+}
+
+/* =========================================================================
+   Beviteli mezők (pl. a /play PIN-mező)
+   ========================================================================= */
+input[type="text"], input[type="number"], input[type="password"], textarea{
+  background-color: var(--cq-surface-2) !important;
+  color: var(--cq-text) !important;
+  border-color: var(--cq-border) !important;
+}
+input[type="text"]::placeholder, textarea::placeholder{
+  color: var(--cq-text-dim) !important;
+}
+input:focus, textarea:focus{
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--cq-accent) !important;
+  border-color: var(--cq-accent) !important;
+}
+
+/* a játék-PIN beviteli mező Kahoot-stílusú "pill" kiemelése a /play oldalon */
+.border.border-gray-400.self-center.text-center{
+  border-radius: 999px !important;
+  font-size: 1.4rem !important;
+  letter-spacing: .08em;
+  padding: .9rem 1.4rem !important;
+  border-width: 2px !important;
+  font-weight: 800;
+}
+
+/* =========================================================================
+   VÁLASZGOMBOK — a klasszikus Kahoot piros/kék/sárga/zöld
+   A szín a frontend JS-ből inline style="background-color:…" formában
+   érkezik, ezért csak !important + nth-child tudja felülírni.
+   KÉT külön komponens rajzolja ki ugyanezt a rácsot, eltérő gyermek-
+   elemmel és (a player-nél) eggyel több class-szal:
+     - játékos (/play, node 51): .grid...p-4.h-full > BUTTON
+     - host/admin (node 20, "jt"): .grid...p-4        > DIV
+   A ".h-full" NEM kötelező a selectorban (egy Tailwind class-selector
+   attól is matchel, ha az elemen MÉG TÖBB class van) — így mindkettőt
+   lefedi egyetlen szabálycsoport. (A "grid-cols-2 gap-2 w-full p-4" rács
+   NEM ez — az a szabadszöveges kérdések beküldött-válaszok listája,
+   azt nem színezzük át négy válaszszínnel.) Igaz/hamis kérdésnél a
+   tömbben csak 2 answer van, ugyanebbe a konténerbe render-elve, ezért
+   a meglévő nth-child(1)/(2) szabály automatikusan piros/kék lesz,
+   a (3)/(4) egyszerűen nem talál elemet.
+   ========================================================================= */
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4{
+  background-color: transparent !important;
+}
+
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button,
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div{
+  background-color: var(--kahoot-red) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  font-size: 1.15rem;
+  border-color: rgba(0,0,0,.35) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 6px 0 rgba(0,0,0,.35), 0 10px 22px rgba(0,0,0,.4) !important;
+  transition: transform .12s ease, box-shadow .12s ease !important;
+}
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:hover:not(:disabled),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:hover{
+  transform: translateY(-2px);
+}
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:active:not(:disabled){
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(0,0,0,.35), 0 4px 10px rgba(0,0,0,.4) !important;
+}
+/* a host/admin csempén a kontraszt-szöveg NEM a div-en, hanem a gyermek
+   ikon/span elemeken kap saját inline "color:"-t (a háttérszín eredeti,
+   pasztell árnyalatához számolva) — ezt is felül kell írni, különben a
+   szülőn beállított fehér nem öröklődik lefelé. */
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div *{
+  color: #fff !important;
+}
+
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(1),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(1){ background-color: var(--kahoot-red) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(2),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(2){ background-color: var(--kahoot-blue) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(3),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(3){ background-color: var(--kahoot-yellow) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(4),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(4){ background-color: var(--kahoot-green) !important; }
+
+/* =========================================================================
+   "Show result" OSZLOPDIAGRAM (admin, final results — külön lazy-loaded
+   chunk, CuU0kHmD.js). Az oszlopok háttérszíne itt is inline
+   style="background-color: ${answer.color ?? 'black'}"-ból jön, a
+   konténer sor mindhárom sorban (darabszám / oszlop / válasz-felirat)
+   ugyanazt a "flex gap-12" class-t használja — ezért a teljes, mindig
+   jelenlévő alap-class-listát (w-20.self-end.flex.justify-center.
+   border.border-black.shadow-xl.rounded-sm) kell egyben megkövetelni,
+   hogy csak a tényleges oszlopokat találja meg, ne a felirat-sorokat.
+   ========================================================================= */
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm{
+  background-color: var(--kahoot-red) !important;
+}
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(1){ background-color: var(--kahoot-red) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(2){ background-color: var(--kahoot-blue) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(3){ background-color: var(--kahoot-yellow) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(4){ background-color: var(--kahoot-green) !important; }
+
+/* =========================================================================
+   Eredmény-visszajelzés (helyes/helytelen) — élénkebb, de megtartott
+   zöld/piros szemantika
+   ========================================================================= */
+[class*="bg-green-"]{ color: #fff !important; }
+[class*="bg-red-"]{ color: #fff !important; }
+
+/* =========================================================================
+   Dokumentáció (prose) oldalak finomhangolása
+   ========================================================================= */
+.prose, .prose-invert{
+  color: var(--cq-text) !important;
+}
+.prose a{
+  color: var(--cq-accent-hover) !important;
+}
+
+/* =========================================================================
+   ADMIN / HOST JÁTÉKNÉZET — MOBIL (≤640px széles, vagy fekvő telefon
+   ≤500px magas). Az eredeti host-nézet kivetítőre van méretezve
+   (text-6xl cím, 120px-es kör, h-[30vh] kép mt-12-vel, text-2xl + py-4
+   csempék, pt-28 a fix sávok alatt), ezért telefonon már 1-2 kérdésnél
+   görgetni kellett. Itt mindent összehúzunk, hogy egy képernyőre férjen.
+   Szerkezet (node 20, "jt" komponens):
+     div.w-full.h-full.pt-28                    <- tartalom-wrapper
+       div.flex.flex-col.justify-center.w-screen.h-1/6
+         h1.text-6xl                            <- kérdés szövege
+         div.grid.grid-cols-3.my-2 > [üres] [#progress-circle] [p.text-3xl válaszszám]
+       div.flex.w-full > img/video.max-h-[20vh].mb-8   <- kérdés-kép
+       div.grid.grid-rows-2...p-4 > div.rounded-lg.h-fit.flex   <- csempék
+   A fix felső sáv: div.fixed.top-0.w-full.h-10.z-20 (admin-button-ök),
+   alatta a piros időcsík: div.fixed.top-0.bg-red-500.h-8(.mt-10).
+   ========================================================================= */
+@media (max-width: 640px), (max-height: 500px){
+
+  /* --- fix felső vezérlősáv + időcsík --- */
+  .fixed.top-0.w-full.h-10.z-20.grid.grid-cols-2{
+    align-items: center;
+    padding: 0 .5rem;
+    font-size: .9rem;
+  }
+  .admin-button{
+    padding: .35rem .7rem !important;
+    font-size: .8rem !important;
+    line-height: 1.1 !important;
+  }
+  .fixed.top-0.bg-red-500.h-8{
+    height: .5rem !important;
+  }
+  /* a tartalom eddig 7rem-mel (pt-28) kezdődött a 40px sáv + 32px csík
+     alatt; a vékonyított csík után elég ~3.5rem */
+  .w-full.h-full.pt-28{ padding-top: 3.5rem !important; }
+  .w-full.h-full.pt-12{ padding-top: 1.25rem !important; }
+
+  /* --- kérdés fejléc --- */
+  .flex.flex-col.justify-center.w-screen.h-1\/6{
+    height: auto !important;
+    width: 100% !important;
+    padding: 0 .75rem;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6 > h1.text-6xl{
+    font-size: clamp(1.15rem, 5.5vw, 1.75rem) !important;
+    line-height: 1.2 !important;
+    overflow-wrap: anywhere;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6 > .grid.grid-cols-3.my-2{
+    margin: .35rem 0 !important;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6 .text-3xl{
+    font-size: 1.25rem !important;
+  }
+  #progress-circle{
+    width: 60px !important;
+    height: 60px !important;
+    font-size: 1.4rem !important;
+  }
+
+  /* --- kérdés-kép / videó --- */
+  [class*="max-h-[20vh]"]{
+    max-height: 18vh !important;
+    margin-bottom: .25rem !important;
+  }
+  .h-\[30vh\].mt-12{
+    height: 22vh !important;
+    margin-top: .75rem !important;
+  }
+
+  /* --- válaszcsempék (ABCD / igaz-hamis) --- */
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4{
+    grid-auto-columns: minmax(0, 1fr) !important;
+    gap: .5rem !important;
+    padding: .5rem .75rem !important;
+  }
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div{
+    height: auto !important;
+    align-items: center;
+    min-height: 3.25rem;
+    border-radius: .75rem !important;
+    box-shadow: 0 4px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.35) !important;
+  }
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div > img.w-14{
+    width: 1.9rem !important;
+    padding-left: .5rem !important;
+    flex-shrink: 0;
+  }
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div > span.text-2xl,
+  .grid.grid-cols-2.gap-2.w-full.p-4 > div > span.text-2xl{
+    font-size: clamp(.85rem, 3.8vw, 1.05rem) !important;
+    line-height: 1.2 !important;
+    padding: .5rem .35rem !important;
+    overflow-wrap: anywhere;
+  }
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div > span.pl-4.w-10,
+  .grid.grid-cols-2.gap-2.w-full.p-4 > div > span.pl-4.w-10{
+    width: .5rem !important;
+    padding: 0 !important;
+    flex-shrink: 0;
+  }
+  /* szabadszöveges kérdés beküldött válaszai */
+  .grid.grid-cols-2.gap-2.w-full.p-4{
+    gap: .5rem !important;
+    padding: .5rem .75rem !important;
+  }
+
+  /* --- "Show results" oszlopdiagram: 4×w-20 + 3×gap-12 = 464px,
+         telefonon túllógott; a magasság inline rem (max 20rem), ezért
+         arányosan zoom-mal kicsinyítünk, hogy az arányok megmaradjanak --- */
+  .m-auto.w-fit.gap-4.flex.flex-col:has(> .flex.gap-12){
+    zoom: .72;
+  }
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12{
+    gap: 1rem !important;
+  }
+}
+
+/* =========================================================================
+   ADMIN / HOST — FEKVŐ TELEFON (≤500px magas, landscape), HA VAN KÉP.
+   A kör + "x/y válaszolt" sor (grid-cols-3.my-2) egy teljes sort vitt el
+   a kép elől. Fekvőben a kép középen keskeny, két oldalán üres hely van:
+   a sort 0 magasságúra húzzuk, a kört a bal, a számlálót a jobb szélre
+   tesszük, így a kép alá/mellé "lebegnek", a kép pedig nagyobb lehet.
+   A ":has(+ .flex.w-full)" csak akkor illeszkedik, ha a fejlécet közvetlen
+   követi a kép-konténer (kép nélkül a válaszrács jön utána -> marad a
+   normál elrendezés, nem takarunk ki csempéket).
+   ========================================================================= */
+@media (orientation: landscape) and (max-height: 500px){
+  .w-full.h-full.pt-28{ padding-top: 3.25rem !important; }
+
+  .flex.flex-col.justify-center.w-screen.h-1\/6 > h1.text-6xl{
+    font-size: clamp(1rem, 4.2vh, 1.35rem) !important;
+  }
+
+  .flex.flex-col.justify-center.w-screen.h-1\/6:has(+ .flex.w-full) > .grid.grid-cols-3.my-2{
+    height: 0 !important;
+    margin: 0 !important;
+    overflow: visible;
+    align-items: start;
+    padding: .35rem 1rem 0;
+    pointer-events: none;
+    position: relative;
+    z-index: 5;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6:has(+ .flex.w-full) > .grid.grid-cols-3.my-2 > .m-auto:has(#progress-circle){
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0 auto 0 0 !important;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6:has(+ .flex.w-full) > .grid.grid-cols-3.my-2 > span:empty{
+    display: none;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6:has(+ .flex.w-full) > .grid.grid-cols-3.my-2 > p.text-3xl{
+    grid-column: 3;
+    grid-row: 1;
+    margin: 0 0 0 auto !important;
+    padding: .3rem .8rem;
+    border-radius: 999px;
+    background: rgba(12, 9, 36, .75);
+    box-shadow: 0 0 0 1px var(--cq-border);
+    font-size: 1.1rem !important;
+    font-weight: 800;
+  }
+  .flex.flex-col.justify-center.w-screen.h-1\/6:has(+ .flex.w-full) #progress-circle{
+    box-shadow: 0 0 0 3px rgba(12, 9, 36, .6);
+  }
+
+  /* a felszabadult hely a képé */
+  .flex.flex-col.justify-center.w-screen.h-1\/6 + .flex.w-full{
+    margin-top: .35rem;
+  }
+  [class*="max-h-[20vh]"]{
+    max-height: 48vh !important;
+    max-width: calc(100vw - 11rem) !important;
+    border-radius: .5rem;
+  }
+
+  /* csempék egy kicsit alacsonyabbak fekvőben */
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4{
+    padding: .4rem .75rem !important;
+    gap: .4rem !important;
+  }
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div{
+    min-height: 2.6rem;
+  }
+  .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div > span.text-2xl{
+    padding: .35rem !important;
+  }
+}
+
+/* =========================================================================
+   ADMIN / HOST — "SHOW RESULTS" NÉZET, FEKVŐ TELEFON
+   Szerkezet (chunks/CKTfF42J.js, benne a CuU0kHmD.js diagram):
+     div.h-full.flex.flex-col
+       div.flex.justify-center > div > table.table-auto.text-xl   <- top 4 pontlista
+       div.mt-12 > div.flex.justify-center.w-full
+         div.m-auto.w-fit.gap-4.flex.flex-col
+           div.flex.gap-12 > span.self-end.text-lg     <- darabszámok
+           div.flex.gap-12 > div.w-20.self-end...      <- oszlopok (inline height: N*20/összes rem)
+           div.flex.gap-12 > div.w-20 > p.-rotate-45.text-xl  <- válasz-feliratok
+   Fekvőben a táblázat és a diagram egymás mellé kerül, a feliratok nem
+   forognak (az elforgatott, text-xl felirat vitte el a magasság nagy
+   részét), a diagram zoom-mal arányosan kicsinyítve (az oszlop-
+   magasság inline rem, így az arányok megmaradnak).
+   ========================================================================= */
+@media (max-width: 640px), (max-height: 500px){
+  /* a darabszámok eddig csak szöveg-szélesek voltak, így nem az oszlopok
+     fölött álltak: azonos szélesség, mint az oszlopé */
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12 > span.self-end{
+    width: 5rem;
+    flex-shrink: 0;
+    font-weight: 800;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px){
+  .h-full.flex.flex-col:has(> .mt-12 .flex.gap-12){
+    flex-direction: row !important;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    padding: .25rem 1rem 0;
+  }
+  .h-full.flex.flex-col:has(> .mt-12 .flex.gap-12) > .mt-12{
+    margin-top: 0 !important;
+  }
+
+  /* pontlista */
+  .h-full.flex.flex-col:has(> .mt-12 .flex.gap-12) table.text-xl{
+    font-size: 1rem !important;
+    background: rgba(12, 9, 36, .55);
+    border-radius: .75rem;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--cq-border);
+  }
+  .h-full.flex.flex-col:has(> .mt-12 .flex.gap-12) table.text-xl :is(th, td){
+    padding: .35rem .75rem !important;
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* diagram: arányos kicsinyítés, nagyobb belső betűkkel, hogy a zoom
+     után is olvasható maradjon */
+  .m-auto.w-fit.gap-4.flex.flex-col:has(> .flex.gap-12){
+    zoom: .68;
+  }
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12{
+    gap: 1.5rem !important;
+  }
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12 > div.w-20,
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12 > span.self-end{
+    width: 7.5rem !important;
+  }
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12 > span.self-end{
+    font-size: 1.9rem !important;
+  }
+  .m-auto.w-fit.gap-4.flex.flex-col > .flex.gap-12 > div.w-20 > p.\-rotate-45{
+    rotate: none !important;
+    transform: none !important;
+    text-align: center;
+    font-size: 1.55rem !important;
+    line-height: 1.15 !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* QR code to join the game: keep a plain white background for scannability */
+img[alt="QR code to join the game"]{
+  background-color:#fff !important;
+  padding:12px;
+  box-sizing:border-box;
+  filter:none !important;
+}
+
+/* =========================================================================
+   JÁTÉKOS KÉRDÉSNÉZET — "classic" (game_mode = normal) mód, MOBIL
+   (src/lib/play/question.svelte, node 51; CHECK típus: questions/check.svelte)
+   Szerkezet:
+     div.h-screen.w-screen                         <- gyökér
+       div.flex.flex-col.justify-start.mt-10      <- fejléc: h1 + kép
+            (inline height: 16.67% / 33.33%; CSAK normal módban létezik)
+       div.w-full.relative   (inline height: 83.33% / 66.67%)   <- ABCD/igaz-hamis
+         [timer kör abszolút középen] + div.grid.grid-rows-2...  <- gombok
+       --- vagy CHECK típusnál ---
+       div.w-full.h-[95%] (timer + gombrács) + div.flex.justify-center.h-[5%] (Submit)
+   Eredeti hiba: a mt-10 mindig rajta van (class:mt-10={[...]} tömb = mindig
+   igaz), a %-os magasságok + 100vh miatt a nézet túlnyúlik a képernyőn,
+   a kép rácsúszik a gombokra. Itt a gyökér flex-oszlop lesz 100dvh
+   magassággal, a fejléc tartalom szerinti magasságú (max. ~45%), a
+   gombrács kitölti a maradékot. Fekvő mobilon a fejléc balra, a gombok
+   jobbra kerülnek.
+   ========================================================================= */
+
+/* 100vh helyett a látható magasság (mobil böngésző címsorával együtt is
+   kifér) — kahoot módban is */
+.h-screen.w-screen:has(> .w-full.relative > .grid.grid-rows-2.grid-flow-col),
+.h-screen.w-screen:has(> .w-full.h-\[95\%\] > .grid.grid-rows-2.grid-flow-col){
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+}
+
+@media (max-width: 640px), (max-height: 500px){
+
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start):has(> .w-full.relative > .grid.grid-rows-2.grid-flow-col),
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start):has(> .w-full.h-\[95\%\] > .grid.grid-rows-2.grid-flow-col){
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* --- fejléc: kérdés + kép --- */
+  .h-screen.w-screen > .flex.flex-col.justify-start{
+    height: auto !important;
+    margin-top: 0 !important;
+    padding: .75rem .75rem 0;
+  }
+  .h-screen.w-screen:has(> .w-full.relative, > .w-full.h-\[95\%\]) > .flex.flex-col.justify-start{
+    flex: 0 1 auto;
+    max-height: 45%;
+    min-height: 0;
+  }
+  .h-screen.w-screen > .flex.flex-col.justify-start > h1{
+    flex: none;
+    margin: 0 0 .5rem !important;
+    font-size: clamp(1rem, 4.6vw, 1.35rem) !important;
+    line-height: 1.25 !important;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+  .h-screen.w-screen > .flex.flex-col.justify-start > .max-h-full{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+  }
+  .h-screen.w-screen > .flex.flex-col.justify-start > .max-h-full > :is(img, video){
+    max-height: 100% !important;
+    max-width: 100%;
+    margin: 0 auto .25rem !important;
+    object-fit: contain !important;
+    border-radius: .6rem;
+  }
+
+  /* --- választerület kitölti a maradékot --- */
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) > .w-full.relative,
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) > .w-full.h-\[95\%\]{
+    height: auto !important;
+    flex: 1 1 0;
+    min-height: 0;
+    position: relative;   /* CHECK-nél a timer így a rácshoz igazodik, nem a viewporthoz */
+  }
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4{
+    grid-auto-columns: minmax(0, 1fr) !important;
+    grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+    gap: .5rem !important;
+    padding: .5rem .75rem .75rem !important;
+  }
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button{
+    min-height: 0;
+    padding: .4rem .5rem !important;
+    overflow: hidden;
+    font-size: clamp(.95rem, 4.2vw, 1.15rem) !important;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    border-radius: .75rem !important;
+    box-shadow: 0 4px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.35) !important;
+  }
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) #progress-circle{
+    width: 52px !important;
+    height: 52px !important;
+    font-size: 1.2rem !important;
+  }
+
+  /* CHECK: Submit sor */
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) > .flex.justify-center.h-\[5\%\]{
+    height: auto !important;
+    flex: none;
+    padding: 0 .75rem .75rem;
+  }
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) > .flex.justify-center.h-\[5\%\] > .w-1\/2{
+    width: 100% !important;
+    max-width: 22rem;
+  }
+}
+
+/* fekvő telefon: kérdés + kép balra, gombok jobbra */
+@media (orientation: landscape) and (max-height: 500px){
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start):has(> .w-full.relative > .grid.grid-rows-2.grid-flow-col){
+    flex-direction: row;
+  }
+  .h-screen.w-screen:has(> .w-full.relative) > .flex.flex-col.justify-start{
+    flex: 0 0 40%;
+    max-height: none;
+    justify-content: center !important;
+    padding: .75rem 0 .75rem .75rem;
+  }
+  .h-screen.w-screen:has(> .flex.flex-col.justify-start) > .w-full.relative > .grid.grid-rows-2.grid-flow-col{
+    padding: .75rem !important;
+  }
+  .h-screen.w-screen:has(> .w-full.relative) > .flex.flex-col.justify-start > .max-h-full{
+    flex: 0 1 auto;
+  }
+  /* CHECK marad oszlopos, csak a fejléc kisebb */
+  .h-screen.w-screen:has(> .w-full.h-\[95\%\]) > .flex.flex-col.justify-start{
+    max-height: 35%;
+  }
+}

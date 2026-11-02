@@ -53,4 +53,4 @@ COPY --from=builder /usr/src/app/node_modules ./node_modules
 EXPOSE 3000
 
 # the command that starts our app
-CMD ["pnpm", "run", "run:prod"]
+CMD ["node", "index.js"]

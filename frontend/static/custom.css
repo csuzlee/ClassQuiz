@@ -1,272 +1,479 @@
 /* =========================================================================
-   ClassQuiz — Kahoot-ihletésű sötét téma
-   Injektálva: nginx sub_filter (css-injector-9fmpopbpwonwrdfb9lr3qvlj)
-   A frontend Tailwind v4-et használ, --color-* CSS-változókkal; ezeket
-   felülírva a legtöbb utility class (bg-/text-/border-/ring-, dark: és
-   hover: variánsokkal együtt) automatikusan követi az új paletta.
-   A válaszgombok háttérszíne viszont JS-ből kerül inline style-ba
-   (nem Tailwind class), ezért azt külön, nth-child + !important
-   trükkel kell felülírni.
+   ClassQuiz — modern téma (világos + sötét)
+   A static/custom.css-t az app.html a Tailwind CSS előtt linkeli. Mivel ez
+   a fájl réteg nélküli (unlayered), a Tailwind v4 @layer theme/utilities
+   szabályai fölött áll, így a --color-* tokenek felülírása minden utility
+   class-ra (bg-/text-/border-/ring-, hover:, dark: variánsokkal) hat.
+
+   Témaváltás: a <html> elem .dark class-a (a navbar kapcsolója állítja,
+   alapértelmezésben az OS beállítását követi). A Tailwind dark: variánsa
+   is erre a class-ra figyel (app.css: @custom-variant dark).
+
+   Felépítés:
+     1. Tokenek (világos az alap, .dark felülírja)
+     2. Alapok: háttér, betűk, fókusz, görgetősáv
+     3. Sötét mód: a világosra írt utility class-ok átfordítása
+     4. Komponensek: navbar, kártyák, gombok, mezők, márkaszínek
+     5. Válaszcsempék (ABCD / igaz-hamis / szavazás) és oszlopdiagram
+     6. Layout-javítások mobilra/fekvő telefonra (változatlan logika)
+   A válaszgombok háttérszíne JS-ből, inline style-ban érkezik, ezért azt
+   nth-child + !important kombinációval kell felülírni.
    ========================================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
 
+/* =========================================================================
+   1. TOKENEK
+   ========================================================================= */
 :root{
+  color-scheme: light;
+
+  /* felületek */
+  --cq-bg-900: #eef1f8;          /* lap alja */
+  --cq-bg-800: #f7f8fc;          /* lap teteje */
+  --cq-glow: rgba(99, 102, 241, .10);
+  --cq-surface: #ffffff;         /* kártya */
+  --cq-surface-2: #f2f4fa;       /* beágyazott felület, mező */
+  --cq-surface-3: #e5e9f3;       /* hover, semleges gomb */
+  --cq-border: #dbe0ec;
+  --cq-border-strong: #c3cadb;
+
+  /* szöveg */
+  --cq-text: #121729;
+  --cq-text-dim: #4a5470;
+
+  /* kiemelés (indigó) */
+  --cq-accent: #4f46e5;
+  --cq-accent-hover: #4338ca;
+  --cq-accent-text: #ffffff;
+  --cq-accent-soft: #e8e9fd;
+  --cq-accent-border: rgba(79, 70, 229, .45);
+  --cq-link: #4338ca;
+
+  /* árnyékok */
+  --cq-shadow-sm: 0 1px 2px rgba(18, 23, 41, .06);
+  --cq-shadow: 0 1px 2px rgba(18, 23, 41, .05), 0 8px 24px rgba(18, 23, 41, .08);
+  --cq-shadow-cta: 0 1px 2px rgba(79, 70, 229, .25), 0 6px 16px rgba(79, 70, 229, .28);
+
+  /* üveg navbar / lebegő címke */
+  --cq-nav-bg: rgba(255, 255, 255, .78);
+  --cq-pill-bg: rgba(255, 255, 255, .88);
+
+  /* semleges (host vezérlő) gomb */
+  --cq-neutral-btn: #1f2537;
+  --cq-neutral-btn-hover: #2c3448;
+  --cq-neutral-btn-text: #ffffff;
+
+  /* válaszszínek — mind a 4 jól elkülönül, fehér felirat ≥ 4.5:1,
+     a sárgán sötét felirat */
+  --cq-ans-red: #d42a48;
+  --cq-ans-blue: #1d5fd6;
+  --cq-ans-yellow: #f2b01e;
+  --cq-ans-yellow-text: #2a1d00;
+  --cq-ans-green: #137a3a;
+  --cq-tile-edge: rgba(0, 0, 0, .22);
+
+  /* ---- Tailwind v4 palettatokenek ----
+     A --color-white / --color-black NEM írható át, mert ugyanazt a tokent
+     használja a bg-white (háttér) és a text-white (szöveg) is. */
+  --color-blue-50: #eef0ff;
+  --color-blue-100: #e0e3ff;
+  --color-blue-200: #c7ccfe;
+  --color-blue-300: #a5aefc;
+  --color-blue-400: #818bf8;
+  --color-blue-500: #5b55ee;
+  --color-blue-600: var(--cq-accent);
+  --color-blue-700: var(--cq-accent-hover);
+  --color-blue-800: #3730a3;
+
+  --color-red-400: #f0607a;
+  --color-red-500: #e03552;
+  --color-red-600: var(--cq-ans-red);
+  --color-red-700: #b01f3a;
+
+  --color-green-300: #86e0a6;
+  --color-green-400: #3fc77a;
+  --color-green-500: #17914a;
+  --color-green-600: var(--cq-ans-green);
+  --color-green-700: #0f6630;
+
+  --color-yellow-400: #f7c548;
+  --color-yellow-500: var(--cq-ans-yellow);
+  --color-amber-300: #f9cf5e;
+  --color-amber-700: #a86a00;
+  --color-orange-500: #f2711c;
+}
+
+:root.dark{
   color-scheme: dark;
 
-  /* --- saját paletta --- */
-  --cq-bg-900: #0c0924;
-  --cq-bg-800: #130f38;
-  --cq-surface: #1c1650;
-  --cq-surface-2: #251d63;
-  --cq-surface-3: #2e2576;
-  --cq-border: #3d3480;
-  --cq-text: #f4f2ff;
-  --cq-text-dim: #b7afe0;
-  --cq-accent: #7b2ff7;        /* Kahoot-os lila */
-  --cq-accent-hover: #9353fa;
-  --cq-accent-2: #ff3355;      /* CTA pink/piros */
-  --cq-accent-2-hover: #ff5774;
+  --cq-bg-900: #090c17;
+  --cq-bg-800: #0f1424;
+  --cq-glow: rgba(99, 102, 241, .16);
+  --cq-surface: #141a2d;
+  --cq-surface-2: #1b2239;
+  --cq-surface-3: #252d48;
+  --cq-border: #2b3453;
+  --cq-border-strong: #3a4469;
 
-  /* --- Kahoot válaszszínek --- */
-  --kahoot-red: #e21b3c;
-  --kahoot-blue: #1368ce;
-  --kahoot-yellow: #ffa602;
-  --kahoot-green: #26890c;
+  --cq-text: #eef1fa;
+  --cq-text-dim: #a9b2cc;
 
-  /* ---- Tailwind v4 theme tokenek felülírása ----
-     Minden ezekre hivatkozó utility (bg-*, text-*, border-*, ring-*,
-     hover:*, dark:* stb.) automatikusan az új értéket kapja.
-     FIGYELEM: --color-white / --color-black NEM írható át itt token-
-     szinten, mert ugyanazt a tokent használja a bg-white (háttér, sötét
-     legyen) ÉS a text-white/dark:text-white (szöveg, FEHÉR maradjon) —
-     ezt a kettős felhasználást lentebb property-specifikus
-     class-szelektorokkal kezeljük (bg-white vs. text-white külön). */
+  --cq-accent: #5855e8;
+  --cq-accent-hover: #4c49da;
+  --cq-accent-text: #ffffff;
+  --cq-accent-soft: #232a55;
+  --cq-accent-border: rgba(129, 140, 248, .5);
+  --cq-link: #a5b0ff;
 
-  --color-blue-100: #2a2266;
-  --color-blue-200: #352a7d;
-  --color-blue-300: #4b3fa0;
-  --color-blue-400: #6a56d6;
-  --color-blue-500: var(--cq-accent);
-  --color-blue-600: var(--cq-accent-hover);
-  --color-blue-700: #8f4bf5;
-  --color-blue-800: #a870ff;
+  --cq-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --cq-shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 30px rgba(0, 0, 0, .4);
+  --cq-shadow-cta: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(99, 102, 241, .35);
 
-  --color-red-100: #3a1420;
-  --color-red-400: #ff5c75;
-  --color-red-500: var(--kahoot-red);
-  --color-red-600: #c81733;
-  --color-red-700: #a5132b;
+  --cq-nav-bg: rgba(12, 16, 30, .78);
+  --cq-pill-bg: rgba(12, 16, 30, .82);
 
-  --color-green-300: #8de07a;
-  --color-green-400: #4fce3f;
-  --color-green-500: var(--kahoot-green);
-  --color-green-600: #1f7309;
-  --color-green-700: #185c08;
+  --cq-neutral-btn: #252d48;
+  --cq-neutral-btn-hover: #303a5c;
+  --cq-neutral-btn-text: #eef1fa;
 
-  --color-yellow-400: #ffb733;
-  --color-yellow-500: var(--kahoot-yellow);
+  --cq-tile-edge: rgba(0, 0, 0, .4);
 
-  --color-amber-300: var(--kahoot-yellow);
-  --color-amber-700: #a86a00;
-  --color-orange-500: #ff7a1a;
+  /* sötétben a halvány "tint" árnyalatok sötét tintává válnak */
+  --color-blue-50: #1a2048;
+  --color-blue-100: #232a55;
+  --color-blue-200: #2d3670;
+  --color-blue-300: #4650a3;
+  --color-red-100: #3a1622;
+  --color-green-100: #10301f;
+  --color-yellow-100: #3a2d08;
 }
 
 /* =========================================================================
-   Alap: lap háttér, betűtípus
+   2. ALAPOK
    ========================================================================= */
 html, body{
-  background: radial-gradient(circle at 15% 0%, var(--cq-bg-800) 0%, var(--cq-bg-900) 55%) !important;
+  background-color: var(--cq-bg-900) !important;
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, var(--cq-glow), transparent 60%),
+    linear-gradient(180deg, var(--cq-bg-800), var(--cq-bg-900)) !important;
+  background-attachment: fixed !important;
   color: var(--cq-text) !important;
-  font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-h1, h2, h3, h4, .marck-script, .btn-nav{
-  font-family: 'Baloo 2', 'Nunito', sans-serif !important;
+h1, h2, h3, h4{
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif !important;
+  letter-spacing: -0.015em;
+}
+
+/* logó: a régi kézírásos betű helyett modern, színátmenetes szóvédjegy */
+.marck-script{
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  background-image: linear-gradient(120deg, var(--cq-accent) 0%, #a855f7 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 ::selection{ background: var(--cq-accent); color: #fff; }
 
-/* finom lila "scrollbar" a sötét témához */
+/* jól látható billentyűzetes fókusz mindenhol */
+:focus-visible{
+  outline: 3px solid var(--cq-accent) !important;
+  outline-offset: 2px;
+}
+
 ::-webkit-scrollbar{ width: 10px; height: 10px; }
-::-webkit-scrollbar-track{ background: var(--cq-bg-900); }
-::-webkit-scrollbar-thumb{ background: var(--cq-surface-3); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover{ background: var(--cq-accent); }
+::-webkit-scrollbar-track{ background: transparent; }
+::-webkit-scrollbar-thumb{
+  background: var(--cq-border-strong);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover{ background-color: var(--cq-accent); }
+
+/* modernebb, kicsit nagyobb lekerekítések */
+[class*="rounded-sm"]{ border-radius: .5rem; }
+[class*="rounded-lg"]{ border-radius: .75rem; }
+[class*="rounded-xl"]{ border-radius: 1rem; }
 
 /* =========================================================================
-   Széles seprés: minden olyan elem, amelynek class-ában fehér/szürke/fekete
-   háttér vagy szöveg Tailwind-utility szerepel — substring-selectorral,
-   hogy ne kelljen minden árnyalatot egyenként felsorolni.
+   3. SÖTÉT MÓD — a világos témára írt utility class-ok átfordítása
+   (substring-selectorral, hogy ne kelljen minden árnyalatot felsorolni)
    ========================================================================= */
 
-/* világos felületek -> sötét kártya felületek */
-[class*="bg-white"],
-[class*="bg-gray-5"],
-[class*="bg-gray-1"],
-[class*="bg-gray-2"]{
+/* világos felületek -> sötét kártyafelület */
+.dark [class*="bg-white"],
+.dark [class*="bg-gray-5"],
+.dark [class*="bg-gray-1"],
+.dark [class*="bg-gray-2"],
+.dark [class*="bg-slate-5"],
+.dark [class*="bg-slate-1"]{
   background-color: var(--cq-surface) !important;
 }
 
-/* "dark:" variánsban használt sötét felületek -> még egy fokkal emeltebb sötét */
-[class*="dark:bg-gray-7"],
-[class*="dark:bg-gray-8"],
-[class*="dark:bg-gray-9"],
-[class*="bg-gray-7"],
-[class*="bg-gray-8"],
-[class*="bg-gray-9"]{
+/* sötét felületek -> egy fokkal emeltebb sötét */
+.dark [class*="bg-gray-6"],
+.dark [class*="bg-gray-7"],
+.dark [class*="bg-gray-8"],
+.dark [class*="bg-gray-9"],
+.dark [class*="bg-slate-8"]{
   background-color: var(--cq-surface-2) !important;
 }
 
-/* szövegszínek: sötét/fekete szöveg -> világos szöveg a sötét háttéren.
-   A text-white / dark:text-white itt is explicit marad (fehér/világos),
-   mert a --color-white tokent szándékosan NEM írjuk át (lásd fentebb). */
-[class*="text-black"],
-[class*="text-white"],
-[class*="text-gray-7"],
-[class*="text-gray-8"],
-[class*="text-gray-9"]{
+/* szöveg */
+.dark [class*="text-black"],
+.dark [class*="text-white"],
+.dark [class*="text-gray-7"],
+.dark [class*="text-gray-8"],
+.dark [class*="text-gray-9"]{
   color: var(--cq-text) !important;
 }
-[class*="text-gray-4"],
-[class*="text-gray-5"],
-[class*="text-gray-6"]{
+.dark [class*="text-blue-"]{
+  color: var(--cq-link) !important;
+}
+.dark [class*="text-gray-4"],
+.dark [class*="text-gray-5"],
+.dark [class*="text-gray-6"]{
   color: var(--cq-text-dim) !important;
 }
 
-/* A visszaszámláló kör (#progress-circle) belseje szándékosan fehér marad
-   (JS-ből jövő inline --background: radial-gradient(white 50%, ...) —
-   ez nem Tailwind class, CSS-ből nem firkálható át anélkül, hogy a
-   színes "sürgősség-gyűrűt" is elveszítenénk). A benne lévő szám viszont
-   text-black class-t kap, amit a fenti általános szabály világosra
-   váltana -> fehér szöveg fehér körön, olvashatatlan. ID-vel felülírva
-   (nagyobb specificitás, mint az attribútum-szelektor), hogy itt maradjon
-   sötét a szöveg. */
-#progress-circle{
-  color: #1b1130 !important;
+/* telített zöld/piros háttéren fehér, sárgán sötét felirat */
+.dark [class*="bg-green-5"],
+.dark [class*="bg-green-6"],
+.dark [class*="bg-green-7"],
+.dark [class*="bg-red-5"],
+.dark [class*="bg-red-6"],
+.dark [class*="bg-red-7"]{
+  color: #fff !important;
 }
-
-/* keretek */
-[class*="border-black"],
-[class*="border-gray-"]{
-  border-color: var(--cq-border) !important;
+.dark [class*="bg-yellow-4"],
+.dark [class*="bg-yellow-5"],
+.dark [class*="bg-amber-3"],
+.dark [class*="bg-lime-4"],
+.dark [class*="bg-emerald-3"]{
+  color: #1a1600 !important;
 }
 
 /* =========================================================================
-   Navigáció / fejléc
+   4. KOMPONENSEK
    ========================================================================= */
-header, nav, [class*="backdrop-blur"]{
-  background-color: rgba(18, 14, 48, 0.82) !important;
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
+
+/* keretek: mindkét témában halk, egységes */
+:root [class*="border-black"],
+:root [class*="border-gray-"]{
+  border-color: var(--cq-border) !important;
 }
 
-.btn-nav{
+/* --- navbar / fejléc: üveghatás + vékony elválasztó --- */
+:root nav[class],
+:root header[class]{
+  background-color: var(--cq-nav-bg) !important;
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  backdrop-filter: saturate(160%) blur(18px);
+  box-shadow: 0 1px 0 var(--cq-border) !important;
+}
+
+.btn-nav,
+:root .btn-nav{
   color: var(--cq-text) !important;
-  font-weight: 700 !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  border-radius: .6rem !important;
+  border-color: transparent !important;
+  padding: .45rem .8rem !important;
+  transition: background-color .15s ease, color .15s ease !important;
 }
 .btn-nav:hover{
-  color: var(--cq-accent-hover) !important;
+  color: var(--cq-accent) !important;
+  background-color: var(--cq-accent-soft);
+}
+/* a "Play" link (border-2) a navbarban kiemelt, pill-gomb */
+:root nav .btn-nav.border-2,
+:root nav a.btn-nav[href="/play"]{
+  background-color: var(--cq-accent) !important;
+  color: var(--cq-accent-text) !important;
+  box-shadow: var(--cq-shadow-cta);
+}
+:root nav a.btn-nav[href="/play"]:hover{
+  background-color: var(--cq-accent-hover) !important;
 }
 
 .link-hover:hover{
-  color: var(--cq-accent-hover) !important;
+  color: var(--cq-accent) !important;
 }
 
-/* =========================================================================
-   Kártyák / panelek — kerekítés, árnyék, kis lila kontúr
-   ========================================================================= */
-[class*="rounded-lg"],
-[class*="rounded-xl"],
-[class*="rounded-2xl"]{
-  border-color: var(--cq-border) !important;
+/* --- kártyák / panelek --- */
+:root [class*="shadow-md"],
+:root [class*="shadow-lg"],
+:root [class*="shadow-xl"],
+:root [class*="shadow-2xl"]{
+  box-shadow: var(--cq-shadow), 0 0 0 1px var(--cq-border) !important;
 }
 
-[class*="shadow-md"],
-[class*="shadow-lg"],
-[class*="shadow-2xl"]{
-  box-shadow: 0 8px 28px rgba(0,0,0,.55), 0 0 0 1px var(--cq-border) !important;
-}
-
-/* =========================================================================
-   Gombok — lekerekítettebb, félkövér, Kahoot-os CTA-gradiens a lila/pink
-   elsődleges gombokon
-   ========================================================================= */
+/* --- gombok --- */
 button, .btn, [role="button"]{
-  font-weight: 700;
+  font-weight: 600;
 }
 
-[class*="bg-blue-5"],
-[class*="bg-blue-6"],
-[class*="bg-blue-7"],
-[class*="bg-blue-8"]{
-  background-image: linear-gradient(135deg, var(--cq-accent), var(--cq-accent-2)) !important;
+/* elsődleges (kék/indigó) gombok: tömör kiemelőszín, fehér felirat */
+:root [class*="bg-blue-5"],
+:root [class*="bg-blue-6"],
+:root [class*="bg-blue-7"],
+:root [class*="bg-blue-8"]{
   background-color: var(--cq-accent) !important;
+  background-image: none !important;
   border-color: transparent !important;
-  color: #fff !important;
-  box-shadow: 0 6px 18px rgba(123,47,247,.45) !important;
+  color: var(--cq-accent-text) !important;
+  box-shadow: var(--cq-shadow-cta) !important;
 }
-[class*="hover:bg-blue-"]:hover{
-  filter: brightness(1.12);
-  transform: translateY(-1px);
+:root [class*="hover:bg-blue-"]:hover:not(:disabled){
+  background-color: var(--cq-accent-hover) !important;
 }
 
-/* a régi "natúr" márka-gombok (bg-[#B07156] stb., Tailwind arbitrary-value
-   class, NEM a --color-* tokenre hivatkozik) -> ugyanaz a lila/pink CTA */
-[class*="B07156" i],
-[class*="4E6E58" i],
-[class*="7F7057" i]{
+/* a régi barna márkagomb (BrownButton, bg-[#B07156]) -> elsődleges gomb */
+:root [class*="bg-[#B07156]" i]{
   background-color: var(--cq-accent) !important;
-  background-image: linear-gradient(135deg, var(--cq-accent), var(--cq-accent-2)) !important;
-  color: #fff !important;
-  box-shadow: 0 6px 18px rgba(123,47,247,.45) !important;
+  background-image: none !important;
+  color: var(--cq-accent-text) !important;
+  font-weight: 600;
+  box-shadow: var(--cq-shadow-cta) !important;
+  transition: background-color .15s ease, transform .15s ease, box-shadow .15s ease !important;
 }
-[class*="D6EDC9" i]{
-  background-color: var(--cq-surface-2) !important;
+:root [class*="bg-[#B07156]" i]:hover:not(:disabled):not([disabled]){
+  background-color: var(--cq-accent-hover) !important;
+  opacity: 1 !important;
+}
+:root [class*="bg-[#B07156]" i]:active:not(:disabled){
+  transform: translateY(1px);
+}
+:root :is(button, a)[class*="bg-[#B07156]" i]{
+  min-height: 2.75rem;            /* kényelmes érintési felület */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+}
+/* barna keret/körvonal -> halvány indigó */
+:root [class*="border-[#B07156]" i]{
+  border-color: var(--cq-accent-border) !important;
+}
+:root [class*="outline-[#B07156]" i]{
+  outline-color: var(--cq-accent-border) !important;
 }
 
-/* =========================================================================
-   Beviteli mezők (pl. a /play PIN-mező)
-   ========================================================================= */
-input[type="text"], input[type="number"], input[type="password"], textarea{
+/* a többi régi "natúr" árnyalat */
+:root [class*="bg-[#4E6E58]" i]{ background-color: var(--cq-accent) !important; color: var(--cq-accent-text) !important; }
+:root [class*="bg-[#7F7057]" i]{ background-color: var(--cq-surface-3) !important; }
+:root [class*="bg-[#D6EDC9]" i]{ background-color: var(--cq-surface-2) !important; }
+:root.dark [class*="bg-[#4e6e58]" i]{ background-color: var(--cq-accent-soft) !important; }
+
+/* zöld márka-színátmenet (pl. hírlevél doboz) -> indigó–lila */
+:root [class*="from-[#009444]" i]{
+  background-image: linear-gradient(120deg, var(--cq-accent), #8b5cf6) !important;
+  color: #fff;
+}
+
+/* host vezérlő gombok */
+:root .admin-button{
+  background-color: var(--cq-neutral-btn) !important;
+  color: var(--cq-neutral-btn-text) !important;
+  border-radius: .6rem !important;
+  font-weight: 600;
+  box-shadow: var(--cq-shadow-sm);
+}
+:root .admin-button:hover:not(:disabled){
+  background-color: var(--cq-neutral-btn-hover) !important;
+}
+:root .action-button{
+  background-color: var(--cq-surface) !important;
+  color: var(--cq-text) !important;
+  border: 1px solid var(--cq-border);
+  border-radius: .6rem !important;
+  font-weight: 600;
+  box-shadow: var(--cq-shadow-sm);
+}
+:root .action-button:hover:not(:disabled){
+  background-color: var(--cq-surface-3) !important;
+}
+
+/* --- beviteli mezők --- */
+:root input[type="text"],
+:root input[type="number"],
+:root input[type="password"],
+:root input[type="email"],
+:root input[type="search"],
+:root input[type="url"],
+:root input:not([type]),
+:root select,
+:root textarea{
   background-color: var(--cq-surface-2) !important;
   color: var(--cq-text) !important;
   border-color: var(--cq-border) !important;
 }
-input[type="text"]::placeholder, textarea::placeholder{
+:root input::placeholder,
+:root textarea::placeholder{
   color: var(--cq-text-dim) !important;
+  opacity: 1;
 }
-input:focus, textarea:focus{
+:root input:focus,
+:root select:focus,
+:root textarea:focus{
   outline: none !important;
-  box-shadow: 0 0 0 3px var(--cq-accent) !important;
   border-color: var(--cq-accent) !important;
+  box-shadow: 0 0 0 3px var(--cq-accent-border) !important;
 }
 
-/* a játék-PIN beviteli mező Kahoot-stílusú "pill" kiemelése a /play oldalon */
-.border.border-gray-400.self-center.text-center{
+/* a játék-PIN / név mező a /play oldalon: nagy, jól tapintható pill */
+:root .border.border-gray-400.self-center.text-center{
   border-radius: 999px !important;
-  font-size: 1.4rem !important;
-  letter-spacing: .08em;
-  padding: .9rem 1.4rem !important;
+  font-size: 1.5rem !important;
+  letter-spacing: .1em;
+  padding: .85rem 1.4rem !important;
   border-width: 2px !important;
-  font-weight: 800;
+  font-weight: 700;
+  width: min(20rem, calc(100vw - 2rem));
+  margin-top: .5rem;
+  background-color: var(--cq-surface) !important;
+  box-shadow: var(--cq-shadow) !important;
+}
+:root .border.border-gray-400.self-center.text-center:focus{
+  box-shadow: 0 0 0 4px var(--cq-accent-border), var(--cq-shadow) !important;
+}
+
+/* --- egyéb --- */
+.prose, .prose-invert{
+  color: var(--cq-text) !important;
+}
+:root .prose a{
+  color: var(--cq-link) !important;
+}
+
+/* QR-kód: mindig fehér alap a beolvashatóságért */
+img[alt="QR code to join the game"]{
+  background-color: #fff !important;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: .75rem;
+  filter: none !important;
 }
 
 /* =========================================================================
-   VÁLASZGOMBOK — a klasszikus Kahoot piros/kék/sárga/zöld
-   A szín a frontend JS-ből inline style="background-color:…" formában
-   érkezik, ezért csak !important + nth-child tudja felülírni.
-   KÉT külön komponens rajzolja ki ugyanezt a rácsot, eltérő gyermek-
-   elemmel és (a player-nél) eggyel több class-szal:
-     - játékos (/play, node 51): .grid...p-4.h-full > BUTTON
-     - host/admin (node 20, "jt"): .grid...p-4        > DIV
-   A ".h-full" NEM kötelező a selectorban (egy Tailwind class-selector
-   attól is matchel, ha az elemen MÉG TÖBB class van) — így mindkettőt
-   lefedi egyetlen szabálycsoport. (A "grid-cols-2 gap-2 w-full p-4" rács
-   NEM ez — az a szabadszöveges kérdések beküldött-válaszok listája,
-   azt nem színezzük át négy válaszszínnel.) Igaz/hamis kérdésnél a
-   tömbben csak 2 answer van, ugyanebbe a konténerbe render-elve, ezért
-   a meglévő nth-child(1)/(2) szabály automatikusan piros/kék lesz,
-   a (3)/(4) egyszerűen nem talál elemet.
+   5. VÁLASZCSEMPÉK — piros / kék / sárga / zöld
+   Két komponens rajzolja ugyanazt a rácsot:
+     - játékos (lib/play/question.svelte, questions/check.svelte): > BUTTON
+     - host   (lib/play/admin/question.svelte):                    > DIV
+   Igaz/hamis kérdésnél csak 2 elem van -> piros/kék.
+   (A "grid-cols-2 gap-2 w-full p-4" rács a szabadszöveges válaszok
+   listája, azt nem színezzük.)
    ========================================================================= */
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4{
   background-color: transparent !important;
@@ -274,74 +481,86 @@ input:focus, textarea:focus{
 
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button,
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div{
-  background-color: var(--kahoot-red) !important;
+  background-color: var(--cq-ans-red) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 60%) !important;
   color: #fff !important;
-  font-weight: 800 !important;
-  font-size: 1.15rem;
-  border-color: rgba(0,0,0,.35) !important;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-weight: 700 !important;
+  font-size: 1.2rem;
+  letter-spacing: -0.005em;
+  border: 0 !important;
   border-radius: 1rem !important;
-  box-shadow: 0 6px 0 rgba(0,0,0,.35), 0 10px 22px rgba(0,0,0,.4) !important;
-  transition: transform .12s ease, box-shadow .12s ease !important;
+  box-shadow: inset 0 -5px 0 var(--cq-tile-edge), 0 8px 20px rgba(0,0,0,.18) !important;
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease !important;
 }
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:hover:not(:disabled),
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:hover{
   transform: translateY(-2px);
+  filter: brightness(1.06);
 }
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:active:not(:disabled){
   transform: translateY(2px);
-  box-shadow: 0 2px 0 rgba(0,0,0,.35), 0 4px 10px rgba(0,0,0,.4) !important;
+  box-shadow: inset 0 -2px 0 var(--cq-tile-edge), 0 3px 8px rgba(0,0,0,.18) !important;
 }
-/* a host/admin csempén a kontraszt-szöveg NEM a div-en, hanem a gyermek
-   ikon/span elemeken kap saját inline "color:"-t (a háttérszín eredeti,
-   pasztell árnyalatához számolva) — ezt is felül kell írni, különben a
-   szülőn beállított fehér nem öröklődik lefelé. */
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:focus-visible{
+  outline: 4px solid var(--cq-text) !important;
+  outline-offset: 3px;
+}
+/* a host csempén a gyermek ikon/span saját inline színt kap — felülírjuk */
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div *{
   color: #fff !important;
 }
 
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(1),
-.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(1){ background-color: var(--kahoot-red) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(1){ background-color: var(--cq-ans-red) !important; }
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(2),
-.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(2){ background-color: var(--kahoot-blue) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(2){ background-color: var(--cq-ans-blue) !important; }
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(3),
-.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(3){ background-color: var(--kahoot-yellow) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(3){ background-color: var(--cq-ans-yellow) !important; }
 .grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(4),
-.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(4){ background-color: var(--kahoot-green) !important; }
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(4){ background-color: var(--cq-ans-green) !important; }
 
-/* =========================================================================
-   "Show result" OSZLOPDIAGRAM (admin, final results — külön lazy-loaded
-   chunk, CuU0kHmD.js). Az oszlopok háttérszíne itt is inline
-   style="background-color: ${answer.color ?? 'black'}"-ból jön, a
-   konténer sor mindhárom sorban (darabszám / oszlop / válasz-felirat)
-   ugyanazt a "flex gap-12" class-t használja — ezért a teljes, mindig
-   jelenlévő alap-class-listát (w-20.self-end.flex.justify-center.
-   border.border-black.shadow-xl.rounded-sm) kell egyben megkövetelni,
-   hogy csak a tényleges oszlopokat találja meg, ne a felirat-sorokat.
-   ========================================================================= */
+/* sárga csempe: sötét felirat és sötét ikon a jó kontrasztért */
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(3),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > button:nth-child(3) *,
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(3),
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > div:nth-child(3) *{
+  color: var(--cq-ans-yellow-text) !important;
+}
+/* a forma-ikonok (kahoot mód, host csempe) fehérek, a sárgán sötétek */
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > * img{
+  filter: brightness(0) invert(1);
+}
+.grid.grid-rows-2.grid-flow-col.auto-cols-auto.gap-2.w-full.p-4 > :nth-child(3) img{
+  filter: brightness(0) opacity(.82);
+}
+
+/* a visszaszámláló kör belseje (inline radial-gradient) fehér marad,
+   ezért a szám mindig sötét */
+#progress-circle{
+  color: #121729 !important;
+  -webkit-text-fill-color: #121729;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+
+/* "Show results" OSZLOPDIAGRAM (host): az oszlopok inline színt kapnak,
+   ugyanazzal a 4 színnel jelenítjük meg, mint a csempéket */
 .flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm{
-  background-color: var(--kahoot-red) !important;
+  background-color: var(--cq-ans-red) !important;
+  border: 0 !important;
+  border-radius: .6rem .6rem .25rem .25rem !important;
 }
-.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(1){ background-color: var(--kahoot-red) !important; }
-.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(2){ background-color: var(--kahoot-blue) !important; }
-.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(3){ background-color: var(--kahoot-yellow) !important; }
-.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(4){ background-color: var(--kahoot-green) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(1){ background-color: var(--cq-ans-red) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(2){ background-color: var(--cq-ans-blue) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(3){ background-color: var(--cq-ans-yellow) !important; }
+.flex.gap-12 > div.w-20.self-end.flex.justify-center.border.border-black.shadow-xl.rounded-sm:nth-child(4){ background-color: var(--cq-ans-green) !important; }
 
 /* =========================================================================
-   Eredmény-visszajelzés (helyes/helytelen) — élénkebb, de megtartott
-   zöld/piros szemantika
+   6. LAYOUT-JAVÍTÁSOK (mobil / tablet / fekvő telefon)
    ========================================================================= */
-[class*="bg-green-"]{ color: #fff !important; }
-[class*="bg-red-"]{ color: #fff !important; }
-
-/* =========================================================================
-   Dokumentáció (prose) oldalak finomhangolása
-   ========================================================================= */
-.prose, .prose-invert{
-  color: var(--cq-text) !important;
-}
-.prose a{
-  color: var(--cq-accent-hover) !important;
-}
 
 /* =========================================================================
    ADMIN / HOST JÁTÉKNÉZET — MOBIL (≤640px széles, vagy fekvő telefon
@@ -502,13 +721,13 @@ input:focus, textarea:focus{
     margin: 0 0 0 auto !important;
     padding: .3rem .8rem;
     border-radius: 999px;
-    background: rgba(12, 9, 36, .75);
+    background: var(--cq-pill-bg);
     box-shadow: 0 0 0 1px var(--cq-border);
     font-size: 1.1rem !important;
     font-weight: 800;
   }
   .flex.flex-col.justify-center.w-screen.h-1\/6:has(+ .flex.w-full) #progress-circle{
-    box-shadow: 0 0 0 3px rgba(12, 9, 36, .6);
+    box-shadow: 0 0 0 3px var(--cq-pill-bg);
   }
 
   /* a felszabadult hely a képé */
@@ -574,7 +793,7 @@ input:focus, textarea:focus{
   /* pontlista */
   .h-full.flex.flex-col:has(> .mt-12 .flex.gap-12) table.text-xl{
     font-size: 1rem !important;
-    background: rgba(12, 9, 36, .55);
+    background: var(--cq-pill-bg);
     border-radius: .75rem;
     overflow: hidden;
     box-shadow: 0 0 0 1px var(--cq-border);
@@ -614,14 +833,6 @@ input:focus, textarea:focus{
     overflow: hidden;
     overflow-wrap: anywhere;
   }
-}
-
-/* QR code to join the game: keep a plain white background for scannability */
-img[alt="QR code to join the game"]{
-  background-color:#fff !important;
-  padding:12px;
-  box-sizing:border-box;
-  filter:none !important;
 }
 
 /* =========================================================================

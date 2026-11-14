@@ -9,6 +9,8 @@ SPDX-License-Identifier: MPL-2.0
 /* Write your global styles here, in PostCSS syntax */
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
+/* dark: utilities follow the .dark class on <html> (set from the navbar toggle / OS preference) */
+@custom-variant dark (&:where(.dark, .dark *));
 @tailwind utilities;
 
 .marck-script {

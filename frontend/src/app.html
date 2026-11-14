@@ -40,7 +40,23 @@ SPDX-License-Identifier: MPL-2.0
 		<meta name="apple-mobile-web-app-title" content="ClassQuiz" />
 		<meta name="application-name" content="ClassQuiz" />
 		<meta name="msapplication-TileColor" content="#00a300" />
-		<meta name="theme-color" content="#ffffff" />
+		<meta name="theme-color" content="#f7f8fc" />
+		<script>
+			// Apply the theme before first paint (the layout repeats this after hydration).
+			(function () {
+				try {
+					var dark =
+						localStorage.theme === 'dark' ||
+						(!('theme' in localStorage) &&
+							window.matchMedia('(prefers-color-scheme: dark)').matches);
+					document.documentElement.classList.toggle('dark', dark);
+					if (dark)
+						document
+							.querySelector('meta[name="theme-color"]')
+							.setAttribute('content', '#0f1424');
+				} catch (e) {}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body>
